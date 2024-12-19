@@ -23,10 +23,6 @@
         file: "{{ yaml_file }}"
         name: app_data
 
-    #- name: Print loaded applications
-    #  debug:
-    #    var: app_data
-
     - name: Validate application names and warn if too long
       debug:
         msg: "WARNING: Application name {{ item.application_name }} exceeds 40 characters. Skipping."
@@ -41,7 +37,31 @@
       loop: "{{ app_data.applications }}"
       when: item.application_name | length <= 40
 
-    - name: Ensure .circleci directory exists
+    - name: Check if remote branch exists
+      command: "git branch -r --list origin/{{ item.jira_ticket }}"
+      args:
+        chdir: "{{ base_dir }}/{{ item.application_name }}"
+      register: remote_branch_check
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+      
+    - name: Print remote branch check result
+      debug:
+        var: remote_branch_check
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+      
+    - name: Pull the remote changes into the local branch with automatic merge
+      command: "git pull origin {{ item.jira_ticket }} --no-rebase --strategy=recursive --strategy-option=theirs"
+      args:
+        chdir: "{{ base_dir }}/{{ item.application_name }}"
+      when: >
+        item.application_name | length <= 40 and
+        (remote_branch_check.results | selectattr('item.jira_ticket', 'equalto', item.jira_ticket) | map(attribute='stdout') | first != "")
+      loop: "{{ app_data.applications }}"
+
+
+    - name: Create .circleci directory if it exists
       file:
         path: "{{ base_dir }}/{{ item.application_name }}/.circleci"
         state: directory
@@ -64,25 +84,6 @@
       loop: "{{ app_data.applications }}"
       when: item.application_name | length <= 40
 
-   
-
-    #- name: Commit changes if there are modifications
-    #  command:
-    #    cmd: git add . && git commit -m "'{{ item.jira_ticket }} Comments'"
-    #    chdir: "{{ base_dir }}/{{ item.application_name }}"
-    #  loop: "{{ app_data.applications }}"
-    #  when: item.application_name | length <= 40
-    #  register: commit_status
-    #  failed_when: "'nothing to commit' not in commit_status.stdout"
-
-    - name: Check if branch exists
-      command: "git branch --list {{ item.jira_ticket }}"
-      args:
-        chdir: "{{ base_dir }}/{{ item.application_name }}"
-      register: branch_check
-      loop: "{{ app_data.applications }}"
-      when: item.application_name | length <= 40
-
     - name: Create and checkout new branch if it doesn't exist
       command: "git checkout -b {{ item.jira_ticket }}"
       args:
@@ -92,24 +93,17 @@
       when: item.application_name | length <= 40
 
     - name: Commit changes to git with the ticket number and comments
-      shell: "git add . && git commit -m '{{ item.jira_ticket }} Comments'"
+      shell: "git add . && git commit -m '{{ item.jira_ticket }} Adding CI Pipeline '"
       args:
         chdir: "{{ base_dir }}/{{ item.application_name }}"
       loop: "{{ app_data.applications }}"
       when: item.application_name | length <= 40
       failed_when: false
 
-    - name: Ensure the local branch is up to date
-      shell: |
-        git fetch origin
-        git merge origin/{{ item.jira_ticket }}
-      args:
-        chdir: "{{ base_dir }}/{{ item.application_name }}"
-      loop: "{{ app_data.applications }}"
-      when: item.application_name | length <= 40
-      
-    - name: Push changes to remote repository
-      shell: "git push origin {{ item.jira_ticket }}"
+    
+
+    - name: Push the branch to remote
+      command: "git push origin {{ item.jira_ticket }}"
       args:
         chdir: "{{ base_dir }}/{{ item.application_name }}"
       loop: "{{ app_data.applications }}"
