@@ -1,0 +1,12 @@
+applications:
+  - application_name: MicroserviceA
+    github_url: https://github.com/nomanazeem/app1
+    jira_ticket: "TKT-001"
+
+  - application_name: MicroserviceB
+    github_url: https://github.com/nomanazeem/app2
+    jira_ticket: "TKT-002"
+    
+  - application_name: VeryLongApplicationNameThatExceedsFortyCharacters
+    github_url: https://github.com/nomanazeem/app2
+    jira_ticket: "TKT-003"

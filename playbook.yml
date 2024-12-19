@@ -1,0 +1,122 @@
+---
+- name: Automate CI/CD Pipeline for .NET Microservices
+  hosts: localhost
+  vars:
+    base_dir: "/tmp/repos"  # Base directory for managing repositories
+    yaml_file: "./vars/applications.yml"  # Replace with the actual path to your YAML file
+    dockerfile_template: "./vars/Dockerfile.template"  # Replace with the actual path to your Dockerfile template
+    circleci_template: "./vars/Circleciconfig.yml.template"  # Replace with the actual path to your CircleCI config template
+
+  tasks:
+    - name: Remove base directory if it exists
+      file:
+        path: "{{ base_dir }}"
+        state: absent
+
+    - name: Recreate base directory
+      file:
+        path: "{{ base_dir }}"
+        state: directory
+
+    - name: Load YAML file
+      ansible.builtin.include_vars:
+        file: "{{ yaml_file }}"
+        name: app_data
+
+    #- name: Print loaded applications
+    #  debug:
+    #    var: app_data
+
+    - name: Validate application names and warn if too long
+      debug:
+        msg: "WARNING: Application name {{ item.application_name }} exceeds 40 characters. Skipping."
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length > 40
+
+    - name: Clone the repository if not already cloned
+      git:
+        repo: "{{ item.github_url }}"
+        dest: "{{ base_dir }}/{{ item.application_name }}"
+        version: main
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+
+    - name: Ensure .circleci directory exists
+      file:
+        path: "{{ base_dir }}/{{ item.application_name }}/.circleci"
+        state: directory
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+
+    - name: Add or overwrite Dockerfile
+      copy:
+        src: "{{ dockerfile_template }}"
+        dest: "{{ base_dir }}/{{ item.application_name }}/Dockerfile"
+        force: yes
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+
+    - name: Add or overwrite CircleCI config
+      copy:
+        src: "{{ circleci_template }}"
+        dest: "{{ base_dir }}/{{ item.application_name }}/.circleci/config.yml"
+        force: yes
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+
+   
+
+    #- name: Commit changes if there are modifications
+    #  command:
+    #    cmd: git add . && git commit -m "'{{ item.jira_ticket }} Comments'"
+    #    chdir: "{{ base_dir }}/{{ item.application_name }}"
+    #  loop: "{{ app_data.applications }}"
+    #  when: item.application_name | length <= 40
+    #  register: commit_status
+    #  failed_when: "'nothing to commit' not in commit_status.stdout"
+
+    - name: Check if branch exists
+      command: "git branch --list {{ item.jira_ticket }}"
+      args:
+        chdir: "{{ base_dir }}/{{ item.application_name }}"
+      register: branch_check
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+
+    - name: Create and checkout new branch if it doesn't exist
+      command: "git checkout -b {{ item.jira_ticket }}"
+      args:
+        chdir: "{{ base_dir }}/{{ item.application_name }}"
+      when: "'{{ item.jira_ticket }}' not in branch_check.stdout"
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+
+    - name: Commit changes to git with the ticket number and comments
+      shell: "git add . && git commit -m '{{ item.jira_ticket }} Comments'"
+      args:
+        chdir: "{{ base_dir }}/{{ item.application_name }}"
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+      failed_when: false
+
+    - name: Ensure the local branch is up to date
+      shell: |
+        git fetch origin
+        git merge origin/{{ item.jira_ticket }}
+      args:
+        chdir: "{{ base_dir }}/{{ item.application_name }}"
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+      
+    - name: Push changes to remote repository
+      shell: "git push origin {{ item.jira_ticket }}"
+      args:
+        chdir: "{{ base_dir }}/{{ item.application_name }}"
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+
+    - name: Print summary of processed applications
+      debug:
+        msg: "Processed application: {{ item.application_name }} with Jira ticket: {{ item.jira_ticket }}"
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
