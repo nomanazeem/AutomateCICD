@@ -1,0 +1,144 @@
+---
+- name: Automate CI/CD Pipeline for .NET Microservices
+  hosts: localhost
+  vars:
+    base_dir: "/tmp/repos"  # Base directory for managing repositories
+    yaml_file: "./vars/applications.yml"  # Replace with the actual path to your YAML file
+    dockerfile_template: "./vars/Dockerfile.template"  # Replace with the actual path to your Dockerfile template
+    circleci_template: "./vars/Circleciconfig.yml.template"  # Replace with the actual path to your CircleCI config template
+    octopus_template: "./vars/Octopusdeploy.template"
+    git_user_name: "{{ GIT_USER }}"
+    git_user_email: "{{ GIT_EMAIL }}"
+    git_pat: "{{ GIT_PAT }}"
+ 
+  tasks:
+    - name: Set Git global user name
+      ansible.builtin.command:
+        cmd: git config --global user.name "{{ git_user_name }}"
+ 
+    - name: Set Git global user email
+      ansible.builtin.command:
+        cmd: git config --global user.email "{{ git_user_email }}"
+ 
+    - name: Configure Git credential helper
+      ansible.builtin.command:
+        cmd: git config --global credential.helper store
+ 
+    - name: Create .git-credentials file
+      ansible.builtin.copy:
+        dest: "{{ lookup('env', 'HOME') }}/.git-credentials"
+        content: "https://{{git_user_name}}:{{ git_pat }}@github.com"
+        mode: '0600'
+
+    - name: Remove base directory if it exists
+      file:
+        path: "{{ base_dir }}"
+        state: absent
+
+    - name: Recreate base directory
+      file:
+        path: "{{ base_dir }}"
+        state: directory
+
+    - name: Load YAML file
+      ansible.builtin.include_vars:
+        file: "{{ yaml_file }}"
+        name: app_data
+
+    - name: Validate application names and warn if too long
+      debug:
+        msg: "WARNING: Application name {{ item.application_name }} exceeds 40 characters. Skipping."
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length > 40
+
+    - name: Clone the repository if not already cloned
+      git:
+        repo: "{{ item.github_url }}"
+        dest: "{{ base_dir }}/{{ item.application_name }}"
+        version: main
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+
+    - name: Check if remote branch exists
+      command: "git branch -r --list origin/{{ item.jira_ticket }}"
+      args:
+        chdir: "{{ base_dir }}/{{ item.application_name }}"
+      register: remote_branch_check
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+      
+    #- name: Print remote branch check result
+    #  debug:
+    #    var: remote_branch_check
+    #  loop: "{{ app_data.applications }}"
+    #  when: item.application_name | length <= 40
+      
+    - name: Pull the remote changes into the local branch with automatic merge
+      command: "git pull origin {{ item.jira_ticket }} --no-rebase --strategy=recursive --strategy-option=theirs"
+      args:
+        chdir: "{{ base_dir }}/{{ item.application_name }}"
+      when: >
+        item.application_name | length <= 40 and
+        (remote_branch_check.results | selectattr('item.jira_ticket', 'equalto', item.jira_ticket) | map(attribute='stdout') | first != "")
+      loop: "{{ app_data.applications }}"
+
+
+    - name: Create .circleci directory if it exists
+      file:
+        path: "{{ base_dir }}/{{ item.application_name }}/.circleci"
+        state: directory
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+
+    - name: Add or overwrite Dockerfile
+      copy:
+        src: "{{ dockerfile_template }}"
+        dest: "{{ base_dir }}/{{ item.application_name }}/Dockerfile"
+        force: yes
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+
+    - name: Add or overwrite CircleCI config
+      copy:
+        src: "{{ circleci_template }}"
+        dest: "{{ base_dir }}/{{ item.application_name }}/.circleci/config.yml"
+        force: yes
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+
+    - name: Add or overwrite Octopus deploy
+      copy:
+        src: "{{ octopus_template }}"
+        dest: "{{ base_dir }}/{{ item.application_name }}/deploy.yml"
+        force: yes
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+
+    - name: Create and checkout new branch if it doesn't exist
+      command: "git checkout -b {{ item.jira_ticket }}"
+      args:
+        chdir: "{{ base_dir }}/{{ item.application_name }}"
+      when: "'{{ item.jira_ticket }}' not in branch_check.stdout"
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+
+    - name: Commit changes to git with the ticket number and comments
+      shell: "git add . && git commit -m '{{ item.jira_ticket }} Adding CI Pipeline '"
+      args:
+        chdir: "{{ base_dir }}/{{ item.application_name }}"
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+      failed_when: false
+
+    - name: Push the branch to remote
+      command: "git push origin {{ item.jira_ticket }}"
+      args:
+        chdir: "{{ base_dir }}/{{ item.application_name }}"
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+
+    - name: Print summary of processed applications
+      debug:
+        msg: "Processed application: {{ item.application_name }} with Jira ticket: {{ item.jira_ticket }}"
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
