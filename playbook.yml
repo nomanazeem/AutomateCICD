@@ -27,7 +27,7 @@
     - name: Create .git-credentials file
       ansible.builtin.copy:
         dest: "{{ lookup('env', 'HOME') }}/.git-credentials"
-        content: "https://{{ git_pat }}@github.com"
+        content: "https://{{git_user_name}}:{{ git_pat }}@github.com"
         mode: '0600'
 
     - name: Remove base directory if it exists
