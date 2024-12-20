@@ -6,7 +6,7 @@
     yaml_file: "./vars/applications.yml"  # Replace with the actual path to your YAML file
     dockerfile_template: "./vars/Dockerfile.template"  # Replace with the actual path to your Dockerfile template
     circleci_template: "./vars/Circleciconfig.yml.template"  # Replace with the actual path to your CircleCI config template
-
+    octopus_template: "./vars/Octopusdeploy.template"
   tasks:
     - name: Remove base directory if it exists
       file:
@@ -45,11 +45,11 @@
       loop: "{{ app_data.applications }}"
       when: item.application_name | length <= 40
       
-    - name: Print remote branch check result
-      debug:
-        var: remote_branch_check
-      loop: "{{ app_data.applications }}"
-      when: item.application_name | length <= 40
+    #- name: Print remote branch check result
+    #  debug:
+    #    var: remote_branch_check
+    #  loop: "{{ app_data.applications }}"
+    #  when: item.application_name | length <= 40
       
     - name: Pull the remote changes into the local branch with automatic merge
       command: "git pull origin {{ item.jira_ticket }} --no-rebase --strategy=recursive --strategy-option=theirs"
@@ -80,6 +80,14 @@
       copy:
         src: "{{ circleci_template }}"
         dest: "{{ base_dir }}/{{ item.application_name }}/.circleci/config.yml"
+        force: yes
+      loop: "{{ app_data.applications }}"
+      when: item.application_name | length <= 40
+
+    - name: Add or overwrite Octopus deploy
+      copy:
+        src: "{{ octopus_template }}"
+        dest: "{{ base_dir }}/{{ item.application_name }}/deploy.yml"
         force: yes
       loop: "{{ app_data.applications }}"
       when: item.application_name | length <= 40

@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: #{Deployment.Name}
+  namespace: #{K8s.Namespace}
+spec:
+  replicas: #{Deployment.Replicas}
+  selector:
+    matchLabels:
+      app: #{App.Name}
+  template:
+    metadata:
+      labels:
+        app: #{App.Name}
+    spec:
+      containers:
+      - name: #{App.Name}
+        image: #{Docker.Image}
+        ports:
+        - containerPort: 80
+        env:
+        - name: ENVIRONMENT
+          value: "#{Environment}"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: #{Service.Name}
+  namespace: #{K8s.Namespace}
+spec:
+  type: ClusterIP
+  selector:
+    app: #{App.Name}
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
