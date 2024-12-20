@@ -3,6 +3,19 @@ name: Run Ansible Playbook on Localhost
 on:
   workflow_dispatch: # Enables manual triggering of the workflow
     inputs: # Optional, to define inputs for the workflow
+      app_name:
+        description: 'Application Name' 
+        required: true 
+        default: 'application1'
+      github_url:
+        description: 'Application URL' 
+        required: true 
+        default: 'https://github.com/nomanazeem/app1'
+      jira_ticket:
+        description: 'Ticket Number'
+        required: true
+        default: 'TKT-0001'
+ 
       branch:
         description: 'Branch to run the workflow on'
         default: 'main'
@@ -39,7 +52,12 @@ jobs:
       - name: Run Ansible Playbook
         run: |
           ansible-playbook -i inventory.yml playbook.yml \
-          --extra-vars "GIT_USER=${{ secrets.GHA_USER }} GIT_EMAIL=${{ secrets.GHA_EMAIL }} GIT_PAT=${{ secrets.GHA_PAT }}"
+          --extra-vars "GIT_USER=${{ secrets.GHA_USER }} \
+                        GIT_EMAIL=${{ secrets.GHA_EMAIL }} \
+                        GIT_PAT=${{ secrets.GHA_PAT }}  \
+                        app_name=${{ inputs.app_name }} \
+                        jira_ticket=${{ inputs.jira_ticket }} \
+                        github_url=${{ inputs.github_url }} "
  
         env:
           ANSIBLE_HOST_KEY_CHECKING: 'False'
