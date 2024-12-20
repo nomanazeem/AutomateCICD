@@ -36,6 +36,8 @@ jobs:
       # Step 5: Run Ansible Playbook on localhost
       - name: Run Ansible Playbook
         run: |
-          ansible-playbook -i inventory.yml playbook.yml
+          ansible-playbook -i inventory.yml playbook.yml \
+          --extra-vars "GIT_USER=${{ secrets.GHA_USER }} GIT_EMAIL=${{ secrets.GHA_EMAIL }} GIT_PAT=${{ secrets.GHA_PAT }}"
+ 
         env:
           ANSIBLE_HOST_KEY_CHECKING: 'False'
