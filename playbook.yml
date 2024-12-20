@@ -7,7 +7,29 @@
     dockerfile_template: "./vars/Dockerfile.template"  # Replace with the actual path to your Dockerfile template
     circleci_template: "./vars/Circleciconfig.yml.template"  # Replace with the actual path to your CircleCI config template
     octopus_template: "./vars/Octopusdeploy.template"
+    git_user_name: "{{ GIT_USER }}"
+    git_user_email: "{{ GIT_EMAIL }}"
+    git_pat: "{{ GIT_PAT }}"
+ 
   tasks:
+    - name: Set Git global user name
+      ansible.builtin.command:
+        cmd: git config --global user.name "{{ git_user_name }}"
+ 
+    - name: Set Git global user email
+      ansible.builtin.command:
+        cmd: git config --global user.email "{{ git_user_email }}"
+ 
+    - name: Configure Git credential helper
+      ansible.builtin.command:
+        cmd: git config --global credential.helper store
+ 
+    - name: Create .git-credentials file
+      ansible.builtin.copy:
+        dest: "{{ lookup('env', 'HOME') }}/.git-credentials"
+        content: "https://{{ git_pat }}@github.com"
+        mode: '0600'
+
     - name: Remove base directory if it exists
       file:
         path: "{{ base_dir }}"
@@ -107,8 +129,6 @@
       loop: "{{ app_data.applications }}"
       when: item.application_name | length <= 40
       failed_when: false
-
-    
 
     - name: Push the branch to remote
       command: "git push origin {{ item.jira_ticket }}"

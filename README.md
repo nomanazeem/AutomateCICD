@@ -6,4 +6,4 @@ Automate CI / CD
 # Install ansible
 
 # Run ansible
-ansible-playbook playbook.yml
+ansible-playbook playbook.yml --extra-vars "GIT_USER=nomanazeem GIT_EMAIL=noman_azeem@yahoo.com GIT_PAT="
